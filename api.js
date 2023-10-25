@@ -1,7 +1,7 @@
-'use strict';
-const got = require('got');
+"use strict";
+const got = require("got");
 
-const apiBase = 'https://content.dropboxapi.com/2';
+const apiBase = "https://api.dropboxapi.com/2";
 const api = {
   base: apiBase,
   download: `${apiBase}/files/download`,
@@ -9,17 +9,17 @@ const api = {
   upload: `${apiBase}/files/upload`,
   uploadStart: `${apiBase}/files/upload_session/start`,
   uploadAppend: `${apiBase}/files/upload_session/append_v2`,
-  uploadFinish: `${apiBase}/files/upload_session/finish`
+  uploadFinish: `${apiBase}/files/upload_session/finish`,
 };
 
 const charsToEncode = /[\u007f-\uffff]/g;
-const saveJsonStringify = obj =>
+const saveJsonStringify = (obj) =>
   JSON.stringify(obj).replace(
     charsToEncode,
-    c => '\\u' + ('000' + c.charCodeAt(0).toString(16)).slice(-4)
+    (c) => "\\u" + ("000" + c.charCodeAt(0).toString(16)).slice(-4)
   );
 
-const safeJsonParse = function(data) {
+const safeJsonParse = function (data) {
   if (!data) {
     return;
   }
@@ -32,26 +32,26 @@ const safeJsonParse = function(data) {
   }
 };
 
-const parseResponse = function(cb, isDownload) {
-  return res => {
+const parseResponse = function (cb, isDownload) {
+  return (res) => {
     const statusCode = res.statusCode;
 
     if (statusCode !== 200) {
       res.resume();
       const error = new Error(`Request failed with status code: ${statusCode}`);
-      error.name = 'HTTPError';
+      error.name = "HTTPError";
       error.statusCode = statusCode;
       return cb(error);
     }
 
     if (isDownload) {
-      const rawData = res.headers['dropbox-api-result'];
+      const rawData = res.headers["dropbox-api-result"];
       const [e, parsedData] = safeJsonParse(rawData);
       cb(e, parsedData);
       return;
     }
 
-    const contentType = res.headers['content-type'];
+    const contentType = res.headers["content-type"];
     if (!isDownload && !/^application\/json/.test(contentType)) {
       res.resume();
       return cb(
@@ -61,40 +61,44 @@ const parseResponse = function(cb, isDownload) {
       );
     }
 
-    res.setEncoding('utf8');
-    let rawData = '';
-    res.on('data', chunk => {
+    res.setEncoding("utf8");
+    let rawData = "";
+    res.on("data", (chunk) => {
       rawData += chunk;
     });
-    res.on('end', () => {
+    res.on("end", () => {
       const [e, parsedData] = safeJsonParse(rawData);
       cb(e, parsedData);
     });
   };
 };
 
-module.exports = function(opts, cb) {
+module.exports = function (opts, cb) {
   const isDownload =
-    opts.call === 'download' || opts.call === 'downloadSharedLink';
+    opts.call === "download" || opts.call === "downloadSharedLink";
   const headers = {
-    Authorization: 'Bearer ' + opts.token
+    Authorization: "Bearer " + opts.token,
+    "Dropbox-API-Path-Root": JSON.stringify({
+      ".tag": "root",
+      root: opts.rootId,
+    }),
   };
 
   if (!isDownload) {
-    headers['Content-Type'] = 'application/octet-stream';
+    headers["Content-Type"] = "application/octet-stream";
   }
 
   if (opts.args) {
-    headers['Dropbox-API-Arg'] = saveJsonStringify(opts.args);
+    headers["Dropbox-API-Arg"] = saveJsonStringify(opts.args);
   }
 
   const req = got.stream.post(api[opts.call], {
     headers,
-    throwHttpErrors: false
+    throwHttpErrors: false,
   });
 
-  req.on('error', cb);
-  req.on('response', parseResponse(cb, isDownload));
+  req.on("error", cb);
+  req.on("response", parseResponse(cb, isDownload));
   req.end(opts.data);
   return req;
 };

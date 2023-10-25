@@ -1,21 +1,22 @@
-'use strict';
-const inherits = require('util').inherits;
-const Transform = require('stream').Transform;
-const api = require('./api');
+"use strict";
+const inherits = require("util").inherits;
+const Transform = require("stream").Transform;
+const api = require("./api");
 
-const DropboxUploadStream = function(opts = {}) {
+const DropboxUploadStream = function (opts = {}) {
   Transform.call(this, opts);
   this.chunkSize = opts.chunkSize || 1000 * 1024;
   this.path = opts.path;
   this.token = opts.token;
+  this.rootId = opts.rootId;
   this.autorename = opts.autorename === undefined ? true : opts.autorename;
-  this.mode = opts.mode === undefined ? 'add' : opts.mode;
+  this.mode = opts.mode === undefined ? "add" : opts.mode;
   this.session = undefined;
   this.offset = 0;
 };
 inherits(DropboxUploadStream, Transform);
 
-DropboxUploadStream.prototype.checkBuffer = function(chunk) {
+DropboxUploadStream.prototype.checkBuffer = function (chunk) {
   if (!this.buffer) {
     this.buffer = Buffer.from(chunk);
   } else {
@@ -25,13 +26,13 @@ DropboxUploadStream.prototype.checkBuffer = function(chunk) {
   return this.buffer.length >= this.chunkSize;
 };
 
-DropboxUploadStream.prototype.progress = function() {
+DropboxUploadStream.prototype.progress = function () {
   this.offset += this.buffer ? this.buffer.length : 0;
-  this.emit('progress', this.offset);
+  this.emit("progress", this.offset);
   this.buffer = undefined;
 };
 
-DropboxUploadStream.prototype._transform = function(chunk, encoding, cb) {
+DropboxUploadStream.prototype._transform = function (chunk, encoding, cb) {
   if (!this.checkBuffer(chunk)) {
     return cb();
   }
@@ -43,7 +44,7 @@ DropboxUploadStream.prototype._transform = function(chunk, encoding, cb) {
   }
 };
 
-DropboxUploadStream.prototype._flush = function(cb) {
+DropboxUploadStream.prototype._flush = function (cb) {
   if (this.session) {
     this.uploadFinish(cb);
   } else {
@@ -51,17 +52,17 @@ DropboxUploadStream.prototype._flush = function(cb) {
   }
 };
 
-DropboxUploadStream.prototype.upload = function(cb) {
+DropboxUploadStream.prototype.upload = function (cb) {
   api(
     {
-      call: 'upload',
+      call: "upload",
       token: this.token,
       data: this.buffer,
       args: {
         path: this.path,
         autorename: this.autorename,
-        mode: this.mode
-      }
+        mode: this.mode,
+      },
     },
     (err, res) => {
       if (err) {
@@ -70,18 +71,18 @@ DropboxUploadStream.prototype.upload = function(cb) {
       }
 
       this.progress();
-      this.emit('metadata', res);
+      this.emit("metadata", res);
       process.nextTick(() => cb());
     }
   );
 };
 
-DropboxUploadStream.prototype.uploadStart = function(cb) {
+DropboxUploadStream.prototype.uploadStart = function (cb) {
   api(
     {
-      call: 'uploadStart',
+      call: "uploadStart",
       token: this.token,
-      data: this.buffer
+      data: this.buffer,
     },
     (err, res) => {
       if (err) {
@@ -96,20 +97,20 @@ DropboxUploadStream.prototype.uploadStart = function(cb) {
   );
 };
 
-DropboxUploadStream.prototype.uploadAppend = function(cb) {
+DropboxUploadStream.prototype.uploadAppend = function (cb) {
   api(
     {
-      call: 'uploadAppend',
+      call: "uploadAppend",
       token: this.token,
       data: this.buffer,
       args: {
         cursor: {
           session_id: this.session,
-          offset: this.offset
-        }
-      }
+          offset: this.offset,
+        },
+      },
     },
-    err => {
+    (err) => {
       if (err) {
         this.buffer = undefined;
         return cb(err);
@@ -121,23 +122,23 @@ DropboxUploadStream.prototype.uploadAppend = function(cb) {
   );
 };
 
-DropboxUploadStream.prototype.uploadFinish = function(cb) {
+DropboxUploadStream.prototype.uploadFinish = function (cb) {
   api(
     {
-      call: 'uploadFinish',
+      call: "uploadFinish",
       token: this.token,
       data: this.buffer,
       args: {
         cursor: {
           session_id: this.session,
-          offset: this.offset
+          offset: this.offset,
         },
         commit: {
           path: this.path,
           autorename: this.autorename,
-          mode: this.mode
-        }
-      }
+          mode: this.mode,
+        },
+      },
     },
     (err, res) => {
       if (err) {
@@ -146,7 +147,7 @@ DropboxUploadStream.prototype.uploadFinish = function(cb) {
       }
 
       this.progress();
-      this.emit('metadata', res);
+      this.emit("metadata", res);
       process.nextTick(() => cb());
     }
   );
@@ -154,5 +155,5 @@ DropboxUploadStream.prototype.uploadFinish = function(cb) {
 
 module.exports = {
   DropboxUploadStream,
-  createDropboxUploadStream: opts => new DropboxUploadStream(opts)
+  createDropboxUploadStream: (opts) => new DropboxUploadStream(opts),
 };
